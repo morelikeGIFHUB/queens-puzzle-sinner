@@ -17,11 +17,12 @@ except pygame.error:
 
 WIN_SOUND = None
 if SOUND_ON:
-    win_path = os.path.join(os.path.dirname(__file__), "win.wav")
+    win_path = "queens-puzzle-sinner/jannik_sinner_photos/man i need.m4a"
     if os.path.exists(win_path):
         try:
             WIN_SOUND = pygame.mixer.Sound(win_path)
         except pygame.error:
+            print("Couldn't load win sound. Continuing without sound.")
             WIN_SOUND = None
 
 # ---------------- Visuals ----------------
@@ -309,8 +310,51 @@ def column_singletons(domains: Dict[int, Set[int]]) -> List[Tuple[int, int]]:
             col_to_rows.setdefault(c, []).append(r)
     return [(rows[0], c) for c, rows in col_to_rows.items() if len(rows) == 1]
 
+def assignment_consistent(regions, N: int, assignment: Dict[int, int]) -> bool:
+    """
+    True if the current partial assignment obeys:
+      - at most one queen per column
+      - at most one queen per region
+      - no-touch constraint (including diagonals)
+    (Rows are unique by construction because assignment keys are rows.)
+    """
+    cols_seen: Set[int] = set()
+    regs_seen: Set[int] = set()
+    placed: List[Cell] = []
+
+    for r, c in assignment.items():
+        if not (0 <= r < N and 0 <= c < N):
+            return False
+
+        if c in cols_seen:
+            return False
+        cols_seen.add(c)
+
+        rid = regions[r][c]
+        if rid in regs_seen:
+            return False
+        regs_seen.add(rid)
+
+        placed.append((r, c))
+
+    # no-touch
+    for i in range(len(placed)):
+        r1, c1 = placed[i]
+        for j in range(i + 1, len(placed)):
+            r2, c2 = placed[j]
+            if touches(r1, c1, r2, c2):
+                return False
+
+    return True
+
+
 def propagate(regions, N: int, assignment: Dict[int, int]) -> Tuple[bool, int]:
     forced = 0
+
+    # If caller gave us an inconsistent partial assignment, fail fast.
+    if not assignment_consistent(regions, N, assignment):
+        return False, forced
+
     while True:
         domains = compute_domains(regions, N, assignment)
         if any(len(v) == 0 for v in domains.values()):
@@ -318,31 +362,42 @@ def propagate(regions, N: int, assignment: Dict[int, int]) -> Tuple[bool, int]:
 
         progress = False
 
+        # NOTE: assign forced moves *one-by-one* and validate immediately,
+        # to avoid the "two forced rows pick same column" bug.
         row_forced = [(r, next(iter(cols))) for r, cols in domains.items() if len(cols) == 1]
         if row_forced:
             for r, c in row_forced:
-                if r not in assignment:
-                    assignment[r] = c
-                    forced += 1
-                    progress = True
+                if r in assignment:
+                    continue
+                assignment[r] = c
+                if not assignment_consistent(regions, N, assignment):
+                    return False, forced
+                forced += 1
+                progress = True
             continue
 
         reg_forced = region_singletons(domains, regions, assignment)
         if reg_forced:
             for r, c in reg_forced:
-                if r not in assignment:
-                    assignment[r] = c
-                    forced += 1
-                    progress = True
+                if r in assignment:
+                    continue
+                assignment[r] = c
+                if not assignment_consistent(regions, N, assignment):
+                    return False, forced
+                forced += 1
+                progress = True
             continue
 
         col_forced = column_singletons(domains)
         if col_forced:
             for r, c in col_forced:
-                if r not in assignment:
-                    assignment[r] = c
-                    forced += 1
-                    progress = True
+                if r in assignment:
+                    continue
+                assignment[r] = c
+                if not assignment_consistent(regions, N, assignment):
+                    return False, forced
+                forced += 1
+                progress = True
             continue
 
         if not progress:
@@ -368,18 +423,24 @@ def count_solutions(regions, N: int, limit: int = 2) -> int:
         if solutions >= limit:
             return
 
+        if not assignment_consistent(regions, N, assignment):
+            return
+
         ok, _ = propagate(regions, N, assignment)
         if not ok:
             return
 
         if len(assignment) == N:
-            solutions += 1
+            # Double-check final assignment is truly legal.
+            if assignment_consistent(regions, N, assignment):
+                solutions += 1
             return
 
         domains = compute_domains(regions, N, assignment)
         r = min(domains.keys(), key=lambda rr: len(domains[rr]))
         opts = list(domains[r])
         random.shuffle(opts)
+
         for c in opts:
             if solutions >= limit:
                 return
@@ -389,6 +450,42 @@ def count_solutions(regions, N: int, limit: int = 2) -> int:
 
     dfs({})
     return solutions
+
+
+def find_one_solution(regions, N: int) -> Set[Cell] | None:
+    """
+    Returns one valid solution as a set of (row, col), or None if unsatisfiable.
+    """
+    found: List[Dict[int, int]] = []
+
+    def dfs(assignment: Dict[int, int]):
+        if found:
+            return
+        if not assignment_consistent(regions, N, assignment):
+            return
+
+        ok, _ = propagate(regions, N, assignment)
+        if not ok:
+            return
+
+        if len(assignment) == N:
+            found.append(dict(assignment))
+            return
+
+        domains = compute_domains(regions, N, assignment)
+        r = min(domains.keys(), key=lambda rr: len(domains[rr]))
+        opts = list(domains[r])
+        random.shuffle(opts)
+        for c in opts:
+            a2 = dict(assignment)
+            a2[r] = c
+            dfs(a2)
+
+    dfs({})
+    if not found:
+        return None
+    a = found[0]
+    return {(r, c) for r, c in a.items()}
 
 
 # ============================================================
@@ -409,8 +506,10 @@ def generate_puzzle(N: int, mode: str, tries: int, target_forced: int, require_z
                 continue
 
             # prefer unique
-            if count_solutions(regions, N, limit=2) != 1:
+            solset = find_one_solution(regions, N)
+            if solset is None:
                 continue
+
 
             zero = is_zero_guess_solvable(regions, N)
             f = forced_score(regions, N)
