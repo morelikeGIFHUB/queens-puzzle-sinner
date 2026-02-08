@@ -62,6 +62,7 @@ DIFFICULTIES = {
 }
 
 font = pygame.font.SysFont(None, 28)
+font_small = pygame.font.SysFont(None, 22)
 big_font = pygame.font.SysFont(None, 46)
 
 Cell = Tuple[int, int]
@@ -842,16 +843,28 @@ while running:
 
     draw_text(
         screen,
-        "Left click=X   Right/Ctrl/Double=Queen   R=new   C=clear   1=Easy  2=Normal  3=Evil   ESC=quit",
+        "Welcome to queens, queen!",
         PAD, 14, font, TEXT
     )
-    hint = "0-guess" if state["zero_guess"] else "may-guess"
-    strict = "strict" if state["strict_ok"] else "relaxed"
+
     draw_text(
         screen,
-        f"{state['diff'].upper()}  {N}×{N}  queens {len(state['queens'])}/{N}  forced={state['forced_score']} ({hint}, {strict})",
-        PAD, 42, font, TEXT
+        "Left click=X   Right/Ctrl/Double=Queen   R=new   C=clear",
+        PAD, 65, font_small, TEXT
     )
+    draw_text(
+        screen,
+        " 1=Easy  2=Normal  3=Evil   ESC=quit",
+        PAD, 85, font_small, TEXT
+
+    )
+    # hint = "0-guess" if state["zero_guess"] else "may-guess"
+    # strict = "strict" if state["strict_ok"] else "relaxed"
+    # draw_text(
+    #     screen,
+    #     f"{state['diff'].upper()}  {N}×{N}  queens {len(state['queens'])}/{N} ({hint}, {strict})",
+    #     PAD, 70, font, TEXT
+    # )
     if invalid and not state["solved"]:
         draw_text(screen, "Illegal placement", PAD, TOP_BAR + 8, font, ILLEGAL_RED)
 
