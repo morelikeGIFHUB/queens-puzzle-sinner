@@ -11,18 +11,20 @@ clock = pygame.time.Clock()
 # ---------------- Audio ----------------
 SOUND_ON = True
 try:
+    # macOS often needs specific buffer/frequency settings to avoid lag or failure
+    pygame.mixer.pre_init(44100, -16, 2, 512)
     pygame.mixer.init()
 except pygame.error:
     SOUND_ON = False
 
 WIN_SOUND = None
 if SOUND_ON:
-    win_path = "queens-puzzle-sinner/jannik_sinner_photos/man i need.m4a"
+    win_path = os.path.join(os.path.dirname(__file__), "jannik_sinner_photos", "CCmain i need.mp3")
     if os.path.exists(win_path):
         try:
             WIN_SOUND = pygame.mixer.Sound(win_path)
-        except pygame.error:
-            print("Couldn't load win sound. Continuing without sound.")
+        except pygame.error as e:
+            print(f"Couldn't load win sound: {win_path}. Error: {e}")
             WIN_SOUND = None
 
 # ---------------- Visuals ----------------
