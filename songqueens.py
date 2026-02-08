@@ -61,9 +61,9 @@ DIFFICULTIES = {
     "evil":   {"N": 8, "CELL": 72, "tries": 650, "target_forced": 6, "require_zero_guess": True},
 }
 
-font = pygame.font.SysFont(None, 28)
-font_small = pygame.font.SysFont(None, 22)
-big_font = pygame.font.SysFont(None, 46)
+font = pygame.font.Font('Mexicana.ttf', 28)
+font_small = pygame.font.Font('Mexicana.ttf', 22)
+big_font = pygame.font.Font('Mexicana.ttf', 46)
 
 Cell = Tuple[int, int]
 
