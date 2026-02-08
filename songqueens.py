@@ -36,7 +36,7 @@ REGION_BORDER = 7
 BG = (245, 245, 245)
 TEXT = (20, 20, 20)
 BLACK = (0, 0, 0)
-X_COLOR = (140, 0, 70)
+X_COLOR = (0, 0, 0)  # Hot Pink
 ILLEGAL_RED = (220, 40, 40)
 
 DIRS4 = [(1, 0), (-1, 0), (0, 1), (0, -1)]
@@ -550,9 +550,10 @@ def draw_board(state):
     for (r, c) in xmarks:
         rect = cell_rect(r, c, CELL)
         cx, cy = rect.center
-        s = int(CELL * 0.22)
-        pygame.draw.line(screen, X_COLOR, (cx - s, cy - s), (cx + s, cy + s), 6)
-        pygame.draw.line(screen, X_COLOR, (cx - s, cy + s), (cx + s, cy - s), 6)
+        s = int(CELL * 0.25)
+        # Use a high-contrast dark color and explicit integer coordinates
+        pygame.draw.line(screen, (30, 30, 30), (int(cx - s), int(cy - s)), (int(cx + s), int(cy + s)), 3)
+        pygame.draw.line(screen, (30, 30, 30), (int(cx - s), int(cy + s)), (int(cx + s), int(cy - s)), 3)
 
     invalid = get_invalid_queens(queens, regions, N)
     for (r, c) in queens:
