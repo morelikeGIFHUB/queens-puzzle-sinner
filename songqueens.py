@@ -11,20 +11,18 @@ clock = pygame.time.Clock()
 # ---------------- Audio ----------------
 SOUND_ON = True
 try:
-    # macOS often needs specific buffer/frequency settings to avoid lag or failure
-    pygame.mixer.pre_init(44100, -16, 2, 512)
     pygame.mixer.init()
 except pygame.error:
     SOUND_ON = False
 
 WIN_SOUND = None
 if SOUND_ON:
-    win_path = os.path.join(os.path.dirname(__file__), "jannik_sinner_photos", "CCmain i need.mp3")
+    win_path = "queens-puzzle-sinner/jannik_sinner_photos/CCmain i need.mp3"
     if os.path.exists(win_path):
         try:
             WIN_SOUND = pygame.mixer.Sound(win_path)
-        except pygame.error as e:
-            print(f"Couldn't load win sound: {win_path}. Error: {e}")
+        except pygame.error:
+            print("Couldn't load win sound. Continuing without sound.")
             WIN_SOUND = None
 
 # ---------------- Visuals ----------------
@@ -61,9 +59,8 @@ DIFFICULTIES = {
     "evil":   {"N": 8, "CELL": 72, "tries": 650, "target_forced": 6, "require_zero_guess": True},
 }
 
-font = pygame.font.SysFont(None, 28)
-font_small = pygame.font.SysFont(None, 22)
-big_font = pygame.font.SysFont(None, 46)
+font = pygame.font.SysFont('Mexicana.ttf', 28)
+big_font = pygame.font.SysFont('Mexicana.ttf', 46)
 
 Cell = Tuple[int, int]
 
@@ -843,28 +840,16 @@ while running:
 
     draw_text(
         screen,
-        "Welcome to queens, queen!",
+        "Left click=X   Right/Ctrl/Double=Queen   R=new   C=clear   1=Easy  2=Normal  3=Evil   ESC=quit",
         PAD, 14, font, TEXT
     )
-
+    hint = "0-guess" if state["zero_guess"] else "may-guess"
+    strict = "strict" if state["strict_ok"] else "relaxed"
     draw_text(
         screen,
-        "Left click=X   Right/Ctrl/Double=Queen   R=new   C=clear",
-        PAD, 65, font_small, TEXT
+        f"{state['diff'].upper()}  {N}×{N}  queens {len(state['queens'])}/{N}  forced={state['forced_score']} ({hint}, {strict})",
+        PAD, 42, font, TEXT
     )
-    draw_text(
-        screen,
-        " 1=Easy  2=Normal  3=Evil   ESC=quit",
-        PAD, 85, font_small, TEXT
-
-    )
-    # hint = "0-guess" if state["zero_guess"] else "may-guess"
-    # strict = "strict" if state["strict_ok"] else "relaxed"
-    # draw_text(
-    #     screen,
-    #     f"{state['diff'].upper()}  {N}×{N}  queens {len(state['queens'])}/{N} ({hint}, {strict})",
-    #     PAD, 70, font, TEXT
-    # )
     if invalid and not state["solved"]:
         draw_text(screen, "Illegal placement", PAD, TOP_BAR + 8, font, ILLEGAL_RED)
 
