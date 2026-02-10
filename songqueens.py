@@ -105,6 +105,7 @@ DIFFICULTIES = {
     # Normal: prefer deduction-solvable boards, but don't hard-crash if one
     # can't be found quickly on this machine.
     "normal": {"N": 8,  "CELL": 66, "void": 0, "tries": 1600, "target_forced": 6, "require_zero_guess": False, "prefer_zero_guess": True,  "time_limit_s": 3.0},
+    "lolly":  {"N": 7,  "CELL": 76, "void": 0, "tries": 1400, "target_forced": 6, "require_zero_guess": False, "prefer_zero_guess": True,  "time_limit_s": 2.7},
     "idk_bruv": {"N": 12, "CELL": 42, "void": 0, "tries": 2600, "target_forced": 7, "require_zero_guess": False, "prefer_zero_guess": True, "time_limit_s": 4.2},
     "evil":   {"N": 10, "CELL": 52, "void": 6, "tries": 2200, "target_forced": 6, "require_zero_guess": False, "prefer_zero_guess": True,  "time_limit_s": 3.6},
 }
@@ -191,6 +192,7 @@ def draw_info_panel(state):
         "easy": "Easy",
         "normal": "Normal",
         "idk_bruv": "idk bruv",
+        "lolly": "lolly",
         "evil": "Evil",
     }
     diff = diff_names.get(diff_key, str(diff_key))
@@ -202,7 +204,7 @@ def draw_info_panel(state):
     lines += _wrap_by_chars("1 Easy", max_chars)
     lines += _wrap_by_chars("2 Normal", max_chars)
     lines += _wrap_by_chars("3 Evil", max_chars)
-    lines += _wrap_by_chars("4 idk bruv", max_chars)
+    lines += _wrap_by_chars("4 lolly", max_chars)
     lines += _wrap_by_chars("R New  C Clear", max_chars)
     lines += _wrap_by_chars("Click=X  Drag=paint X  Dbl=Q", max_chars)
     lines += _wrap_by_chars("Ctrl/Right=Q", max_chars)
@@ -1308,7 +1310,7 @@ while running:
             elif event.unicode == "4":
                 if WIN_SOUND is not None:
                     WIN_SOUND.stop()
-                state = build_state("idk_bruv")
+                state = build_state("lolly")
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
             mx, my = event.pos
