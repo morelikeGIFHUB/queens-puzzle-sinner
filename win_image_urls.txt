@@ -1,0 +1,5 @@
+# Put ONE direct image URL per line.
+# Lines starting with # are ignored.
+# These must be publicly reachable direct image files (jpg/png/webp/etc).
+# Example:
+# https://example.com/path/to/image.jpg
