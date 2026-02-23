@@ -14,6 +14,7 @@ from pygame import Surface
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _PHOTO_DIR = _SCRIPT_DIR / "jannik_sinner_photos"
 _QUEEN_FACE_PATH = _PHOTO_DIR / "Jannik Sinner(2).jpg"
+_WIN_IMAGE_PATH = _PHOTO_DIR / "sinner win .jpg"
 _LAST_WIN_FACE_PATH: Path | None = None
 
 
@@ -21,6 +22,12 @@ def load_fixed_queen_surface() -> Surface:
     if not _QUEEN_FACE_PATH.exists():
         raise FileNotFoundError(f"Missing queen face image: {_QUEEN_FACE_PATH}")
     return pygame.image.load(str(_QUEEN_FACE_PATH))
+
+
+def load_fixed_win_surface() -> Surface:
+    if not _WIN_IMAGE_PATH.exists():
+        raise FileNotFoundError(f"Missing win image: {_WIN_IMAGE_PATH}")
+    return pygame.image.load(str(_WIN_IMAGE_PATH))
 
 
 def load_random_win_surface() -> tuple[Surface, str]:
@@ -105,6 +112,8 @@ DIFFICULTIES = {
     # Normal: prefer deduction-solvable boards, but don't hard-crash if one
     # can't be found quickly on this machine.
     "normal": {"N": 8,  "CELL": 66, "void": 0, "tries": 1600, "target_forced": 6, "require_zero_guess": False, "prefer_zero_guess": True,  "time_limit_s": 3.0},
+    # Lolly: 7x7 with mostly small regions.
+    # Generation targets 4 regions with <5 cells, remaining regions expand.
     "lolly":  {"N": 7,  "CELL": 76, "void": 0, "tries": 1400, "target_forced": 6, "require_zero_guess": False, "prefer_zero_guess": True,  "time_limit_s": 2.7},
     "idk_bruv": {"N": 12, "CELL": 42, "void": 0, "tries": 2600, "target_forced": 7, "require_zero_guess": False, "prefer_zero_guess": True, "time_limit_s": 4.2},
     "evil":   {"N": 10, "CELL": 52, "void": 6, "tries": 2200, "target_forced": 6, "require_zero_guess": False, "prefer_zero_guess": True,  "time_limit_s": 3.6},
@@ -352,19 +361,79 @@ def generate_regions(seed_cells: List[Cell], N: int, mode: str, *, void_blob: Se
         regions[r][c] = rid
         fronts[rid].append((r, c))
 
+    # Track region sizes as we grow (used for lolly target caps).
+    region_sizes = [0] * N
+    for r in range(N):
+        for c in range(N):
+            rid = regions[r][c]
+            if rid != UNASSIGNED_ID and 0 <= rid < N:
+                region_sizes[rid] += 1
+
+    size_targets: list[int] | None = None
+    if mode == "lolly":
+        # Lolly: force *most* regions to be small, but not all.
+        # Exactly 4 regions should end up with <5 cells (3 or 4), and the
+        # remaining regions fill the rest of the board.
+        if N < 4:
+            return None
+
+        small_ids = set(random.sample(range(N), k=4))
+        large_ids = [rid for rid in range(N) if rid not in small_ids]
+
+        small_sizes = {rid: random.choice([3, 4]) for rid in small_ids}
+        small_total = sum(small_sizes.values())
+
+        remaining = (N * N) - small_total
+        if remaining <= 0:
+            return None
+
+        base = remaining // len(large_ids)
+        extra = remaining % len(large_ids)
+        large_sizes = [base] * len(large_ids)
+        for i in range(extra):
+            large_sizes[i] += 1
+        random.shuffle(large_sizes)
+
+        targets = [0] * N
+        for rid in small_ids:
+            targets[rid] = max(region_sizes[rid], small_sizes[rid])
+        for rid, sz in zip(large_ids, large_sizes):
+            targets[rid] = max(region_sizes[rid], sz)
+
+        # Defensive: targets must exactly fill the board.
+        if sum(targets) != (N * N):
+            return None
+        if any(targets[rid] >= 5 for rid in small_ids):
+            return None
+
+        size_targets = targets
+
     unassigned = {(r, c) for r in range(N) for c in range(N) if regions[r][c] == UNASSIGNED_ID}
 
     # Multi-source growth: randomly pick which region expands each step.
     # This guarantees all cells are assigned if the grid is connected.
     while unassigned:
-        expandable = [rid for rid in range(N) if fronts[rid]]
+        expandable = [
+            rid
+            for rid in range(N)
+            if fronts[rid] and (size_targets is None or region_sizes[rid] < size_targets[rid])
+        ]
         if not expandable:
-            # Should not happen, but just in case: restart
-            return None
+            # If we're enforcing targets, don't allow overruns.
+            if size_targets is not None:
+                return None
+            expandable = [rid for rid in range(N) if fronts[rid]]
+            if not expandable:
+                return None
 
         # Bias growth: encourage varied sizes (LinkedIn feel)
         # easy/normal: more variance; evil: slightly more even
-        if mode in ("easy",):
+        if mode == "lolly" and size_targets is not None:
+            weights = []
+            for rid in expandable:
+                cap = max(0, size_targets[rid] - region_sizes[rid])
+                weights.append((cap + 0.25) ** 1.15)
+        elif mode in ("easy",):
             weights = [random.random() ** 2.0 for _ in expandable]
         elif mode == "normal":
             weights = [random.random() ** 1.7 for _ in expandable]
@@ -384,10 +453,13 @@ def generate_regions(seed_cells: List[Cell], N: int, mode: str, *, void_blob: Se
 
         random.shuffle(nbrs)
         for rr, cc in nbrs[: max(1, len(nbrs))]:
+            if size_targets is not None and region_sizes[rid] >= size_targets[rid]:
+                break
             if (rr, cc) in unassigned:
                 regions[rr][cc] = rid
                 unassigned.remove((rr, cc))
                 fronts[rid].append((rr, cc))
+                region_sizes[rid] += 1
 
     # Post-pass: make borders more creative with swaps (connectivity-safe)
     # Because the assignment is already connected, small swaps that keep both sides connected are ok.
@@ -1337,13 +1409,12 @@ while running:
                 state["solved"] = is_solved(state["queens"], state["regions"], N)
                 if state["solved"] and not was:
                     try:
-                        win_raw_unconverted, win_credit = load_random_win_surface()
-                        win_raw = win_raw_unconverted.convert_alpha()
+                        win_raw = load_fixed_win_surface().convert_alpha()
                         base = state["base_win"]
                         state["face_base"] = pygame.transform.smoothscale(win_raw, (base, base))
-                        state["win_credit"] = win_credit
+                        state["win_credit"] = None
                     except Exception as e:
-                        print(f"Win image download failed: {e}")
+                        print(f"Win image load failed: {e}")
 
                     if WIN_SOUND is not None and not state["win_played"]:
                         WIN_SOUND.play()
@@ -1443,13 +1514,12 @@ while running:
 
             if state["solved"] and not was:
                 try:
-                    win_raw_unconverted, win_credit = load_random_win_surface()
-                    win_raw = win_raw_unconverted.convert_alpha()
+                    win_raw = load_fixed_win_surface().convert_alpha()
                     base = state["base_win"]
                     state["face_base"] = pygame.transform.smoothscale(win_raw, (base, base))
-                    state["win_credit"] = win_credit
+                    state["win_credit"] = None
                 except Exception as e:
-                    print(f"Win image download failed: {e}")
+                    print(f"Win image load failed: {e}")
 
                 if WIN_SOUND is not None and not state["win_played"]:
                     WIN_SOUND.play()
@@ -1471,16 +1541,8 @@ while running:
         draw_text(screen, "Illegal placement", PAD, TOP_BAR + 8, font, ILLEGAL_RED)
 
     if state["solved"]:
-        state["win_scale"] += 0.010 * state["win_scale_dir"]
-        if state["win_scale"] >= 1.55:
-            state["win_scale"] = 1.55
-            state["win_scale_dir"] = -1.0
-        elif state["win_scale"] <= 1.00:
-            state["win_scale"] = 1.00
-            state["win_scale_dir"] = 1.0
-
-        base = state["base_win"]
-        size = int(base * state["win_scale"])
+        # Fixed-size bouncing win image drawn on top of the board.
+        size = int(state["base_win"])
         face_big = pygame.transform.smoothscale(state["face_base"], (size, size))
 
         x = state["win_x"] + state["vx"]
@@ -1494,13 +1556,7 @@ while running:
             y = max(0, min(H - size, y))
 
         state["win_x"], state["win_y"] = x, y
-
-        overlay = pygame.Surface((W, H), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 70))
-        screen.blit(overlay, (0, 0))
-
         screen.blit(face_big, (x, y))
-        draw_text(screen, "Solved!", PAD, TOP_BAR + 8, big_font, (255, 255, 255))
 
     pygame.display.flip()
 
